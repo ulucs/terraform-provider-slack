@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     slack = {
-      source  = "pablovarela/slack"
+      source  = "ulucs/slack"
       version = "~> 1.0"
     }
   }
