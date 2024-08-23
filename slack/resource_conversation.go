@@ -331,16 +331,20 @@ func resourceSlackConversationUpdate(ctx context.Context, d *schema.ResourceData
 	}
 
 	if d.HasChange("topic") {
-		topic := d.Get("topic")
-		if _, err := client.SetTopicOfConversationContext(ctx, id, topic.(string)); err != nil {
-			return diag.Errorf("couldn't set conversation topic %s: %s", topic.(string), err)
+		topic, exists := d.GetOk("topic")
+		if exists {
+			if _, err := client.SetTopicOfConversationContext(ctx, id, topic.(string)); err != nil {
+				return diag.Errorf("couldn't set conversation topic %s: %s", topic.(string), err)
+			}
 		}
 	}
 
 	if d.HasChange("purpose") {
-		purpose := d.Get("purpose")
-		if _, err := client.SetPurposeOfConversationContext(ctx, id, purpose.(string)); err != nil {
-			return diag.Errorf("couldn't set conversation purpose %s: %s", purpose.(string), err)
+		purpose, exists := d.GetOk("purpose")
+		if exists {
+			if _, err := client.SetPurposeOfConversationContext(ctx, id, purpose.(string)); err != nil {
+				return diag.Errorf("couldn't set conversation purpose %s: %s", purpose.(string), err)
+			}
 		}
 	}
 
