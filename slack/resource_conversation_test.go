@@ -82,6 +82,16 @@ func TestAccSlackConversationTest(t *testing.T) {
 		testSlackConversationUpdate(t, fmt.Sprintf(resourceName, name), createChannel, &updateChannel)
 	})
 
+	t.Run("do not erase pre-existing topic and purpose", func(t *testing.T) {
+		name := acctest.RandomWithPrefix(conversationNamePrefix)
+		createChannel := testAccSlackConversation(name)
+
+		updateName := acctest.RandomWithPrefix(conversationNamePrefix)
+		updateChannel := testAccSlackConversation(updateName)
+
+		testSlackConversationOptionalUpdate(t, fmt.Sprintf(resourceName, name), createChannel, &updateChannel)
+	})
+
 	t.Run("archive channel", func(t *testing.T) {
 		name := acctest.RandomWithPrefix(conversationNamePrefix)
 		createChannel := testAccSlackConversationWithMembers(name, []string{testUser00.id})
@@ -159,6 +169,50 @@ func testSlackConversationUpdate(t *testing.T, resourceName string, createChanne
 	}
 
 	if updateChannel != nil {
+		steps = append(steps, resource.TestStep{
+			Config: testAccSlackConversationConfigWithResourceName(*updateChannel, createChannel.Name),
+			Check: resource.ComposeTestCheckFunc(
+				testCheckSlackChannelAttributes(t, resourceName, *updateChannel),
+				testCheckResourceAttrBasic(resourceName, *updateChannel),
+			),
+		},
+		)
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		IDRefreshName:     resourceName,
+		ProviderFactories: testAccProviderFactories(&providers),
+		CheckDestroy:      testAccCheckConversationDestroy,
+		Steps:             steps,
+	})
+}
+
+func testSlackConversationOptionalUpdate(t *testing.T, resourceName string, createChannel slack.Channel, updateChannel *slack.Channel) {
+	var providers []*schema.Provider
+	steps := []resource.TestStep{
+		{
+			Config: testAccSlackConversationOpttionalConfig(createChannel),
+			Check: resource.ComposeTestCheckFunc(
+				testCheckSlackChannelAttributes(t, resourceName, createChannel),
+				testCheckResourceAttrBasic(resourceName, createChannel),
+			),
+		},
+		{
+			ResourceName:            resourceName,
+			ImportState:             true,
+			ImportStateVerify:       true,
+			ImportStateVerifyIgnore: []string{"permanent_members", "action_on_destroy", "action_on_update_permanent_members", "adopt_existing_channel"},
+		},
+	}
+
+	if updateChannel != nil {
+		// these are the optional fields right now, so carry them over to the updated channel
+		updateChannel.Topic = createChannel.Topic
+		updateChannel.Purpose = createChannel.Purpose
+
 		steps = append(steps, resource.TestStep{
 			Config: testAccSlackConversationConfigWithResourceName(*updateChannel, createChannel.Name),
 			Check: resource.ComposeTestCheckFunc(
@@ -328,4 +382,24 @@ resource slack_conversation %s {
 
 func testAccSlackConversationConfig(c slack.Channel) string {
 	return testAccSlackConversationConfigWithResourceName(c, c.Name)
+}
+
+func testAccSlackConversationOptionalConfigWithResourceName(c slack.Channel, resourceName string) string {
+	var members []string
+	for _, member := range c.Members {
+		members = append(members, fmt.Sprintf(`"%s"`, member))
+	}
+
+	return fmt.Sprintf(`
+resource slack_conversation %s {
+  name              = "%s"
+  permanent_members = [%s]
+  is_private        = %t
+  is_archived       = %t
+}
+`, resourceName, c.Name, strings.Join(members, ","), c.IsPrivate, c.IsArchived)
+}
+
+func testAccSlackConversationOpttionalConfig(c slack.Channel) string {
+	return testAccSlackConversationOptionalConfigWithResourceName(c, c.Name)
 }
